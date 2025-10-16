@@ -43,12 +43,11 @@ def classify_gesture(hand_landmarks):
         return f"Dedos Arriba: {fingers_up}"
 
 # =========================================================
-# --- CLASE TRANSFORMADORA DE VIDEO (EL REEMPLAZO DEL BUCLE CV2) ---
+# --- CLASE TRANSFORMADORA DE VIDEO (CORREGIDA) ---
 # =========================================================
 
 class GestureRecognizer(VideoTransformerBase):
     def __init__(self):
-        # Inicializa MediaPipe dentro de la clase para cada stream
         self.hands = mp_hands.Hands(
             static_image_mode=False, 
             max_num_hands=1, 
@@ -57,25 +56,26 @@ class GestureRecognizer(VideoTransformerBase):
         )
 
     def transform(self, frame):
-        # 1. Convierte el frame de video a un array de OpenCV (BGR)
         img = frame.to_ndarray(format="bgr")
         
-        # 2. Pre-procesamiento de MediaPipe
+        # 1. Voltear la imagen (espejo) y convertir a RGB
+        img = cv2.flip(img, 1)
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # 2. Procesamiento de MediaPipe
         results = self.hands.process(rgb_frame)
 
         current_gesture = "Esperando Gesto..."
         
-        # 3. Dibujar y Clasificar
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 current_gesture = classify_gesture(hand_landmarks)
-
-        # 4. Mostrar el resultado en el frame
+        
+        # 3. Mostrar el resultado
         cv2.putText(img, current_gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2, cv2.LINE_AA)
         
-        # 5. Devuelve el frame modificado para el stream web
+        # 4. RETORNO SEGURO: Aseguramos que el array devuelto nunca sea None
         return img
 
 # =========================================================
