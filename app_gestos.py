@@ -1,333 +1,108 @@
-{
-  "nbformat": 4,
-  "nbformat_minor": 0,
-  "metadata": {
-    "colab": {
-      "provenance": []
-    },
-    "kernelspec": {
-      "name": "python3",
-      "display_name": "Python 3"
-    },
-    "language_info": {
-      "name": "python"
-    }
-  },
-  "cells": [
-    {
-      "cell_type": "code",
-      "execution_count": 5,
-      "metadata": {
-        "colab": {
-          "base_uri": "https://localhost:8080/",
-          "height": 69
-        },
-        "id": "uURtNOayYEWp",
-        "outputId": "c06d6829-700f-4ee9-d1d0-1521444a8cac"
-      },
-      "outputs": [
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text": [
-            "Instalando librerías...\n"
-          ]
-        },
-        {
-          "output_type": "display_data",
-          "data": {
-            "text/plain": [
-              "<IPython.core.display.Javascript object>"
-            ],
-            "application/javascript": [
-              "\n",
-              "    var video;\n",
-              "    var div = null;\n",
-              "    var stream;\n",
-              "    var captureCanvas;\n",
-              "    var imgElement;\n",
-              "\n",
-              "    var shutdown = false;\n",
-              "\n",
-              "    async function startCamera() {\n",
-              "      if (stream) return;\n",
-              "      \n",
-              "      div = document.createElement('div');\n",
-              "      document.body.appendChild(div);\n",
-              "\n",
-              "      video = document.createElement('video');\n",
-              "      video.style.display = 'block';\n",
-              "      stream = await navigator.mediaDevices.getUserMedia({video: true});\n",
-              "      div.appendChild(video);\n",
-              "\n",
-              "      video.srcObject = stream;\n",
-              "      await video.play();\n",
-              "\n",
-              "      captureCanvas = document.createElement('canvas');\n",
-              "      captureCanvas.width = 640;\n",
-              "      captureCanvas.height = 480;\n",
-              "      \n",
-              "      imgElement = document.createElement('img');\n",
-              "      imgElement.src = 'data:image/jpeg;base64,' + '';\n",
-              "      div.appendChild(imgElement);\n",
-              "    }\n",
-              "    \n",
-              "    async function takePhoto(quality = 0.8) {\n",
-              "      if (shutdown) return;\n",
-              "      var ctx = captureCanvas.getContext('2d');\n",
-              "      ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);\n",
-              "      var data = captureCanvas.toDataURL('image/jpeg', quality);\n",
-              "      \n",
-              "      // La clave del fix: Actualiza la imagen visible en Colab (opcional, pero útil)\n",
-              "      imgElement.src = data; \n",
-              "      \n",
-              "      // Devuelve solo el string de base64\n",
-              "      return data.substring(data.indexOf(',')+1);\n",
-              "    }\n",
-              "    \n",
-              "    function stopCamera() {\n",
-              "      if (stream) {\n",
-              "        stream.getTracks().forEach(track => track.stop());\n",
-              "      }\n",
-              "      shutdown = true;\n",
-              "      if(div) {\n",
-              "        document.body.removeChild(div);\n",
-              "      }\n",
-              "    }\n",
-              "    "
-            ]
-          },
-          "metadata": {}
-        },
-        {
-          "output_type": "display_data",
-          "data": {
-            "text/plain": [
-              "<IPython.core.display.Javascript object>"
-            ],
-            "application/javascript": [
-              "startCamera()"
-            ]
-          },
-          "metadata": {}
-        },
-        {
-          "output_type": "stream",
-          "name": "stdout",
-          "text": [
-            "Cámara iniciada. Espera 3 segundos y haz tu gesto. La ejecución tomará 100 frames.\n",
-            "Reconocimiento terminado. Deteniendo la cámara...\n"
-          ]
-        },
-        {
-          "output_type": "display_data",
-          "data": {
-            "text/plain": [
-              "<IPython.core.display.Javascript object>"
-            ],
-            "application/javascript": [
-              "stopCamera()"
-            ]
-          },
-          "metadata": {}
-        }
-      ],
-      "source": [
-        "# =====================================================================================\n",
-        "# CÓDIGO CORREGIDO PARA RECONOCIMIENTO DE GESTOS EN GOOGLE COLAB\n",
-        "# =====================================================================================\n",
-        "\n",
-        "# 1. INSTALACIÓN DE LIBRERÍAS\n",
-        "# Las librerías principales ya vienen preinstaladas, pero aseguramos MediaPipe.\n",
-        "print(\"Instalando librerías...\")\n",
-        "!pip install mediapipe opencv-python > /dev/null\n",
-        "\n",
-        "# 2. IMPORTACIONES NECESARIAS\n",
-        "import cv2\n",
-        "import mediapipe as mp\n",
-        "import numpy as np\n",
-        "from IPython.display import display, Javascript # Para manejar la webcam\n",
-        "from base64 import b64decode\n",
-        "from io import BytesIO\n",
-        "from PIL import Image\n",
-        "\n",
-        "# 3. CONFIGURACIÓN DE MEDIAPIPE\n",
-        "mp_hands = mp.solutions.hands\n",
-        "hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5)\n",
-        "mp_drawing = mp.solutions.drawing_utils\n",
-        "\n",
-        "# --- Función para Clasificar Gestos ---\n",
-        "def classify_gesture(hand_landmarks):\n",
-        "    \"\"\"Clasifica el gesto basándose en la posición de los dedos.\"\"\"\n",
-        "\n",
-        "    # Puntos de referencia de las puntas (TIP)\n",
-        "    tip_ids = [mp_hands.HandLandmark.INDEX_FINGER_TIP,\n",
-        "               mp_hands.HandLandmark.MIDDLE_FINGER_TIP,\n",
-        "               mp_hands.HandLandmark.RING_FINGER_TIP,\n",
-        "               mp_hands.HandLandmark.PINKY_TIP]\n",
-        "\n",
-        "    fingers_up = 0\n",
-        "\n",
-        "    # Chequeo del Pulgar (asumiendo mano derecha: TIP_4 está a la izquierda del MCP_2)\n",
-        "    # Nota: Este chequeo es simple y puede fallar con la mano izquierda o ángulos raros.\n",
-        "    thumb_tip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]\n",
-        "    thumb_ip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_IP]\n",
-        "\n",
-        "    # Si la punta del pulgar (TIP) está más allá de la articulación (IP) en el eje X (para el pulgar hacia afuera)\n",
-        "    if thumb_tip.x < thumb_ip.x:\n",
-        "        fingers_up += 1\n",
-        "\n",
-        "    # Chequeo de los demás dedos (Índice, Medio, Anular, Meñique)\n",
-        "    for id in tip_ids:\n",
-        "        tip = hand_landmarks.landmark[id]\n",
-        "        pip = hand_landmarks.landmark[id - 2]\n",
-        "\n",
-        "        # Si la punta (TIP) está más arriba (menor valor Y) que la articulación (PIP), el dedo está levantado.\n",
-        "        if tip.y < pip.y:\n",
-        "            fingers_up += 1\n",
-        "\n",
-        "    # Clasificación de Gestos\n",
-        "    if fingers_up == 5:\n",
-        "        return \"🖐️ Mano Abierta\"\n",
-        "    elif fingers_up == 1 and hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP].y:\n",
-        "        return \"👆 Apuntando\"\n",
-        "    elif fingers_up == 0:\n",
-        "        return \"✊ Puño Cerrado\"\n",
-        "    elif fingers_up == 2 and hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP].y and hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_PIP].y:\n",
-        "        return \"✌️ Victoria\"\n",
-        "    else:\n",
-        "        return f\"Dedos Arriba: {fingers_up}\"\n",
-        "\n",
-        "# --- CÓDIGO DE MANEJO DE WEBCAM EN COLAB ---\n",
-        "\n",
-        "def video_stream():\n",
-        "  \"\"\"Define las funciones JavaScript para controlar y tomar fotos de la cámara.\"\"\"\n",
-        "  js = Javascript('''\n",
-        "    var video;\n",
-        "    var div = null;\n",
-        "    var stream;\n",
-        "    var captureCanvas;\n",
-        "    var imgElement;\n",
-        "\n",
-        "    var shutdown = false;\n",
-        "\n",
-        "    async function startCamera() {\n",
-        "      if (stream) return;\n",
-        "\n",
-        "      div = document.createElement('div');\n",
-        "      document.body.appendChild(div);\n",
-        "\n",
-        "      video = document.createElement('video');\n",
-        "      video.style.display = 'block';\n",
-        "      stream = await navigator.mediaDevices.getUserMedia({video: true});\n",
-        "      div.appendChild(video);\n",
-        "\n",
-        "      video.srcObject = stream;\n",
-        "      await video.play();\n",
-        "\n",
-        "      captureCanvas = document.createElement('canvas');\n",
-        "      captureCanvas.width = 640;\n",
-        "      captureCanvas.height = 480;\n",
-        "\n",
-        "      imgElement = document.createElement('img');\n",
-        "      imgElement.src = 'data:image/jpeg;base64,' + '';\n",
-        "      div.appendChild(imgElement);\n",
-        "    }\n",
-        "\n",
-        "    async function takePhoto(quality = 0.8) {\n",
-        "      if (shutdown) return;\n",
-        "      var ctx = captureCanvas.getContext('2d');\n",
-        "      ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);\n",
-        "      var data = captureCanvas.toDataURL('image/jpeg', quality);\n",
-        "\n",
-        "      // La clave del fix: Actualiza la imagen visible en Colab (opcional, pero útil)\n",
-        "      imgElement.src = data;\n",
-        "\n",
-        "      // Devuelve solo el string de base64\n",
-        "      return data.substring(data.indexOf(',')+1);\n",
-        "    }\n",
-        "\n",
-        "    function stopCamera() {\n",
-        "      if (stream) {\n",
-        "        stream.getTracks().forEach(track => track.stop());\n",
-        "      }\n",
-        "      shutdown = true;\n",
-        "      if(div) {\n",
-        "        document.body.removeChild(div);\n",
-        "      }\n",
-        "    }\n",
-        "    ''')\n",
-        "  display(js)\n",
-        "\n",
-        "def get_frame():\n",
-        "  \"\"\"Llama a la función JS y decodifica la data en una imagen OpenCV.\"\"\"\n",
-        "  # La función eval(display(...).data) obtiene la data de la imagen de JS\n",
-        "  data = eval(display(Javascript('takePhoto(0.5)'), raw=True).data)\n",
-        "\n",
-        "  # Decodifica la base64 y la convierte a formato OpenCV (BGR)\n",
-        "  img_data = b64decode(data)\n",
-        "  img_np = np.frombuffer(img_data, np.uint8)\n",
-        "  frame = cv2.imdecode(img_np, cv2.IMREAD_COLOR)\n",
-        "  return frame\n",
-        "\n",
-        "# =====================================================================================\n",
-        "# 4. INICIO Y BUCLE PRINCIPAL DE RECONOCIMIENTO\n",
-        "# =====================================================================================\n",
-        "\n",
-        "# 4.1. Iniciar el stream de video en el navegador\n",
-        "video_stream()\n",
-        "display(Javascript('startCamera()'))\n",
-        "print(\"Cámara iniciada. Espera 3 segundos y haz tu gesto. La ejecución tomará 100 frames.\")\n",
-        "\n",
-        "# 4.2. Bucle principal\n",
-        "FRAME_COUNT = 100 # Número de frames a capturar\n",
-        "for i in range(FRAME_COUNT):\n",
-        "    try:\n",
-        "        frame = get_frame()\n",
-        "    except Exception as e:\n",
-        "        # Esto maneja errores de inicialización o si la cámara no está lista\n",
-        "        # print(f\"Error en frame {i}: {e}. Intentando de nuevo...\")\n",
-        "        cv2.waitKey(100) # Pequeña espera\n",
-        "        continue\n",
-        "\n",
-        "    # Pre-procesamiento\n",
-        "    frame = cv2.flip(frame, 1) # Espejo\n",
-        "    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)\n",
-        "\n",
-        "    # Procesamiento de MediaPipe\n",
-        "    results = hands.process(rgb_frame)\n",
-        "\n",
-        "    current_gesture = \"Esperando Gesto...\"\n",
-        "\n",
-        "    if results.multi_hand_landmarks:\n",
-        "        for hand_landmarks in results.multi_hand_landmarks:\n",
-        "            # Dibujar los landmarks\n",
-        "            mp_drawing.draw_landmarks(\n",
-        "                frame,\n",
-        "                hand_landmarks,\n",
-        "                mp_hands.HAND_CONNECTIONS,\n",
-        "                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),\n",
-        "                mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=2, circle_radius=2)\n",
-        "            )\n",
-        "\n",
-        "            # Clasificar el gesto\n",
-        "            current_gesture = classify_gesture(hand_landmarks)\n",
-        "\n",
-        "    # Mostrar el resultado en el frame de OpenCV\n",
-        "    cv2.putText(frame, current_gesture, (20, 40),\n",
-        "                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2, cv2.LINE_AA)\n",
-        "\n",
-        "    # Mostrar el frame procesado. En Colab, cv2_imshow es la forma de mostrar.\n",
-        "    # Nota: Colab solo muestra el ÚLTIMO frame en la salida de la celda, pero el JS actualiza la imagen en vivo.\n",
-        "    # cv2_imshow(frame)\n",
-        "\n",
-        "    cv2.waitKey(1)\n",
-        "\n",
-        "# 4.3. Limpieza al finalizar\n",
-        "print(\"Reconocimiento terminado. Deteniendo la cámara...\")\n",
-        "# Detener el stream de la cámara del navegador\n",
-        "display(Javascript('stopCamera()'))"
-      ]
-    }
-  ]
-}
+import streamlit as st
+import cv2
+import mediapipe as mp
+from PIL import Image
+import numpy as np # Necesario para la conversión de numpy/PIL
+
+# --- Configuración de MediaPipe ---
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=1,
+    min_detection_confidence=0.5,
+    min_tracking_confidence=0.5
+)
+mp_drawing = mp.solutions.drawing_utils
+
+# --- Función para Clasificar Gestos ---
+def classify_gesture(hand_landmarks):
+    # (El resto de la lógica de classify_gesture debe ir aquí)
+    tip_ids = [mp_hands.HandLandmark.INDEX_FINGER_TIP, 
+               mp_hands.HandLandmark.MIDDLE_FINGER_TIP, 
+               mp_hands.HandLandmark.RING_FINGER_TIP, 
+               mp_hands.HandLandmark.PINKY_TIP]
+    
+    fingers_up = 0
+    
+    # Chequeo del Pulgar
+    thumb_tip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP]
+    thumb_ip = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_IP]
+    if thumb_tip.x < thumb_ip.x: 
+        fingers_up += 1
+
+    # Chequeo de los demás dedos
+    for id in tip_ids:
+        tip = hand_landmarks.landmark[id]
+        pip = hand_landmarks.landmark[id - 2]
+        if tip.y < pip.y:
+            fingers_up += 1
+
+    # Clasificación simple
+    if fingers_up == 5:
+        return "🖐️ Mano Abierta"
+    elif fingers_up == 1 and hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y < hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_PIP].y:
+        return "👆 Apuntando"
+    elif fingers_up == 0:
+        return "✊ Puño Cerrado"
+    else:
+        return f"Dedos Arriba: {fingers_up}"
+
+# =========================================================
+# --- Configuración de Streamlit ---
+# =========================================================
+st.title("Reconocimiento de Gestos con Streamlit")
+st.markdown("Presiona **Iniciar Webcam** para comenzar el reconocimiento.")
+
+# Placeholder para el frame de video
+frame_placeholder = st.empty()
+gesture_placeholder = st.empty()
+stop_button_placeholder = st.empty()
+
+# Bandera para controlar la ejecución
+if 'running' not in st.session_state:
+    st.session_state['running'] = False
+
+# Botón de inicio
+if st.button("Iniciar Webcam"):
+    st.session_state['running'] = True
+
+# Botón de detención (solo visible cuando está corriendo)
+if st.session_state['running']:
+    if st.button("Detener Webcam"):
+        st.session_state['running'] = False
+
+if st.session_state['running']:
+    # 1. Iniciar la captura de video
+    cap = cv2.VideoCapture(0)
+    
+    # 2. Bucle principal de procesamiento
+    while cap.isOpened() and st.session_state['running']:
+        ret, frame = cap.read()
+        if not ret:
+            st.warning("No se puede acceder a la cámara. Reintentando...")
+            cap = cv2.VideoCapture(0) # Reintentar
+            continue
+        
+        frame = cv2.flip(frame, 1)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = hands.process(rgb_frame)
+        
+        current_gesture = "Esperando Gesto..."
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                current_gesture = classify_gesture(hand_landmarks)
+
+        # 5. Mostrar el resultado en el frame de OpenCV
+        cv2.putText(frame, current_gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2, cv2.LINE_AA)
+        
+        # 6. Conversión para Streamlit y actualización
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(frame_rgb)
+        
+        frame_placeholder.image(img, channels="RGB", use_column_width=True)
+        gesture_placeholder.markdown(f"**Gesto Detectado:** **{current_gesture}**")
+        
+    # 7. Liberar recursos al salir del bucle
+    cap.release()
+    st.session_state['running'] = False # Asegurar que la bandera se resetee al terminar
