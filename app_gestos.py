@@ -43,26 +43,36 @@ def classify_gesture(hand_landmarks):
         return f"Dedos Arriba: {fingers_up}"
 
 # =========================================================
-# --- CLASE TRANSFORMADORA DE VIDEO (CORREGIDA) ---
+# --- CLASE TRANSFORMADORA DE VIDEO (OPTIMIZADA) ---
 # =========================================================
 
 class GestureRecognizer(VideoTransformerBase):
     def __init__(self):
+        # Inicializa MediaPipe dentro de la clase
         self.hands = mp_hands.Hands(
             static_image_mode=False, 
             max_num_hands=1, 
             min_detection_confidence=0.5, 
             min_tracking_confidence=0.5
         )
+        self.display_width = 320  # Nueva resolución más pequeña
+        self.display_height = 240 # Nueva resolución más pequeña
 
     def transform(self, frame):
         img = frame.to_ndarray(format="bgr")
         
-        # 1. Voltear la imagen (espejo) y convertir a RGB
+        # 1. Reducir la Resolución del Frame (¡CLAVE PARA LA OPTIMIZACIÓN!)
+        img = cv2.resize(img, (self.display_width, self.display_height))
+        
+        # 2. Voltear la imagen y convertir a RGB
         img = cv2.flip(img, 1)
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
-        # 2. Procesamiento de MediaPipe
+        # Opcional: Probar escala de grises para ver si mejora la velocidad
+        # gray_frame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # results = self.hands.process(gray_frame)
+        
+        # 3. Procesamiento de MediaPipe
         results = self.hands.process(rgb_frame)
 
         current_gesture = "Esperando Gesto..."
@@ -71,13 +81,12 @@ class GestureRecognizer(VideoTransformerBase):
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 current_gesture = classify_gesture(hand_landmarks)
-        
-        # 3. Mostrar el resultado
-        cv2.putText(img, current_gesture, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2, cv2.LINE_AA)
-        
-        # 4. RETORNO SEGURO: Aseguramos que el array devuelto nunca sea None
-        return img
 
+        # 4. Mostrar el resultado
+        cv2.putText(img, current_gesture, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2, cv2.LINE_AA)
+        
+        # 5. Retorno seguro
+        return img
 # =========================================================
 # --- CONFIGURACIÓN DE STREAMLIT ---
 # =========================================================
@@ -90,6 +99,14 @@ webrtc_streamer(
     key="gesture-recognizer",
     mode=WebRtcMode.SENDRECV,
     video_processor_factory=GestureRecognizer,
-    media_stream_constraints={"video": True, "audio": False},
+    media_stream_constraints={
+        "video": {
+            "width": {"ideal": 320},  # Pedir al navegador una resolución baja
+            "height": {"ideal": 240},
+            "frameRate": {"ideal": 10}, # Pedir solo 10 frames por segundo (¡CLAVE!)
+        }, 
+        "audio": False
+    },
     async_processing=True,
+)
 )
