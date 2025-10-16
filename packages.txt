@@ -5,3 +5,4 @@ libxext6
 libfontconfig1
 libxi6
 libgconf-2-4
+libgl1
