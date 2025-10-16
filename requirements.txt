@@ -1,7 +1,7 @@
-streamlit==1.25.0  <-- Congelamos Streamlit a una versión estable
+streamlit==1.25.0
 opencv-python
-mediapipe==0.10.11 <-- Congelamos MediaPipe a una versión compatible
-protobuf==3.20.3   <-- ¡Esta es la clave! Congelamos Protobuf a una versión antigua.
+mediapipe==0.10.11
+protobuf==3.20.3
 Pillow
 numpy
 streamlit-webrtc
