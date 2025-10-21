@@ -1,8 +1,0 @@
-python3.11
-
-libsm6
-libxext6
-libfontconfig1
-libxi6
-libgconf-2-4
-libgl1
