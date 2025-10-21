@@ -13,7 +13,8 @@ Proyecto de visión por computadora que implementa la detección de gestos de la
 
 | Archivo/Carpeta | Descripción |
 | :--- | :--- |
-| `control_mano_3d.py` | Script principal que integra MediaPipe, OpenGL, Pygame y la lógica de gestos. |
+| `control_mano_3d.py` | Script prueba con Dino 3D que integra MediaPipe, OpenGL, Pygame y la lógica de gestos. |
+| `gestos_3d_mediapipe_final` | Script principal funcional con Planeta 3D que integra MediaPipe, OpenGL, Pygame y la lógica de gestos. |
 | `11677_dinosaur_v1_L3.obj` | Archivo del modelo 3D (Object File) del dinosaurio. |
 | `11677_dinosaur_v1_L3.mtl` | Archivo de materiales que define la apariencia del modelo 3D. |
 | `dinosaur_diffuse.jpg` | Textura (imagen) del dinosaurio. |
